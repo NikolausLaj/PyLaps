@@ -1,0 +1,23 @@
+# Ignore virtual environment folder
+venv/
+.Venv/
+ENV/
+env/
+.virtualenv/
+
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore VS Code settings (if using VS Code)
+.vscode/
+
+# Ignore PyCharm settings (if using PyCharm)
+.idea/
+
+*.avi
