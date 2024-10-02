@@ -1,3 +1,4 @@
+import threading
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from tkinterdnd2 import TkinterDnD, DND_FILES
@@ -17,6 +18,7 @@ class TimeLapseApp(TkinterDnD.Tk):
         self.image_files = []
         self.display_time = ctk.StringVar(value="1")  # Default display time 1 second
         self.tracking_option = ctk.StringVar(value="No Tracking")  # Default is No Tracking
+        self.final_video_path = None  # Store the path of the final video
         
         # Create Drag and Drop area
         self.drop_area = ctk.CTkLabel(self, text="Drag and Drop Images Here", width=400, height=150, fg_color="gray75", corner_radius=10)
@@ -41,6 +43,10 @@ class TimeLapseApp(TkinterDnD.Tk):
         # Create Button
         self.create_button = ctk.CTkButton(self, text="Create", command=self.create_timelapse)
         self.create_button.pack(pady=20)
+
+        # Preview Button
+        self.preview_button = ctk.CTkButton(self, text="Preview", command=self.preview_video)
+        self.preview_button.pack(pady=10)
 
     def add_files(self, event):
         """Handles adding files through drag-and-drop."""
@@ -78,16 +84,48 @@ class TimeLapseApp(TkinterDnD.Tk):
         # Remove uncompressed video
         os.remove(uncompressed_path)
         
+        # Save the final video path for preview
+        self.final_video_path = final_output
+        
         messagebox.showinfo("Success", f"Time-lapse video saved as {final_output}")
 
+    def preview_video(self):
+        """Preview the generated video in a non-blocking manner."""
+        if not self.final_video_path:
+            messagebox.showwarning("No Video", "Please create a video before previewing.")
+            return
+
+        # Run the video preview in a separate thread to prevent freezing the GUI
+        preview_thread = threading.Thread(target=self.play_video, args=(self.final_video_path,))
+        preview_thread.start()
+
+    def play_video(self, video_path):
+        """Play the video using OpenCV."""
+        cap = cv2.VideoCapture(video_path)
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            cv2.imshow("Video Preview", frame)
+            if cv2.waitKey(30) & 0xFF == ord('q'):  # Press 'q' to quit the preview
+                break
+
+        cap.release()
+        cv2.destroyAllWindows()
+
     def generate_video(self, save_path, display_time):
-        """Generates a time-lapse video with optional eye stabilization."""
+        """Generates a time-lapse video with optional eye stabilization and cropping."""
         first_image = cv2.imread(self.image_files[0])
         height, width, _ = first_image.shape
 
+        # Define a crop size (adjust based on the expected amount of translation)
+        crop_width = int(width * 0.9)  # Crop 90% of the width, leaving a margin for translation
+        crop_height = int(height * 0.9)  # Crop 90% of the height
+
         # Initialize video writer
         fourcc = cv2.VideoWriter_fourcc(*'MJPG')
-        video = cv2.VideoWriter(save_path, fourcc, 1 / display_time, (width, height))
+        video = cv2.VideoWriter(save_path, fourcc, 1 / display_time, (crop_width, crop_height))
 
         # Load the Haar Cascade for eye detection
         eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
@@ -119,12 +157,17 @@ class TimeLapseApp(TkinterDnD.Tk):
                 # Apply the translation to align the image
                 translation_matrix = np.float32([[1, 0, dx], [0, 1, dy]])
                 img_aligned = cv2.warpAffine(img, translation_matrix, (width, height))
+
+                # Crop the image to a fixed size based on the center point (post-alignment)
+                crop_x_start = max(0, (width - crop_width) // 2)
+                crop_y_start = max(0, (height - crop_height) // 2)
+                img_cropped = img_aligned[crop_y_start:crop_y_start + crop_height, crop_x_start:crop_x_start + crop_width]
             else:
                 # If no eyes are detected, just use the original image (no translation)
-                img_aligned = img
+                img_cropped = img[:crop_height, :crop_width]
 
-            # Write the aligned (or unaligned) image to the video
-            video.write(img_aligned)
+            # Write the cropped and aligned image to the video
+            video.write(img_cropped)
 
         video.release()
 
