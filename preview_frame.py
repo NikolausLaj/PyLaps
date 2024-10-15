@@ -44,10 +44,15 @@ class PreviewFrame(ctk.CTkFrame):
 
     def display_next_image(self):
         if self.image_index < len(self.images) and self.is_previewing:
-            image_path = self.images[self.image_index]
-            img = Image.open(image_path)
+            image = self.images[self.image_index]
 
-            # Maintain aspect ratio while fitting the image into a 600x400 box
+            # Check if it's a file path (string) or an image object
+            if isinstance(image, str):
+                img = Image.open(image)  # If it's a path, open the image
+            else:
+                img = image  # Otherwise, it's already an Image object
+
+            # Resize and display the image
             img = self.resize_image_to_fit(img, (600, 400))
 
             # Use CTkImage for high-DPI scaling and customtkinter compatibility
@@ -62,6 +67,7 @@ class PreviewFrame(ctk.CTkFrame):
             self.after(1000, self.display_next_image)
         else:
             self.is_previewing = False  # Stop previewing after all images are displayed
+
 
     def resize_image_to_fit(self, img, max_size):
         """ Resize the image to fit within max_size, maintaining aspect ratio """
